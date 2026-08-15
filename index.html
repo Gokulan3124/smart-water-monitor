@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Smart Water Monitoring System</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+<header class="topbar">
+
+    <div>
+        <h1>SMART WATER</h1>
+        <p>Real-Time Water Quality & Tank Monitoring</p>
+    </div>
+
+    <div class="connection-box">
+
+        <span id="connectionDot" class="dot offline"></span>
+
+        <span id="connectionText">
+            Arduino Disconnected
+        </span>
+
+        <button id="connectBtn">
+            CONNECT ARDUINO
+        </button>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+
+    <!-- SYSTEM STATUS -->
+
+    <section class="status-panel">
+
+        <div>
+            <span class="small-label">SYSTEM STATUS</span>
+
+            <h2 id="systemStatus">
+                WAITING FOR USB
+            </h2>
+        </div>
+
+        <div class="status-right">
+
+            <span>Samples:</span>
+            <strong id="sampleCount">0</strong>
+
+            <span>Last Update:</span>
+            <strong id="lastUpdate">--</strong>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- MAIN SENSOR CARDS -->
+
+    <section class="cards">
+
+
+        <!-- DISTANCE -->
+
+        <div class="card water-card">
+
+            <div class="card-header">
+
+                <span>💧</span>
+
+                <div>
+                    <h3>Water Distance</h3>
+                    <p>Ultrasonic Sensor</p>
+                </div>
+
+            </div>
+
+            <div class="big-value">
+
+                <span id="distance">
+                    --
+                </span>
+
+                <small>cm</small>
+
+            </div>
+
+            <div class="mini-info">
+
+                <span>Water Level</span>
+
+                <strong id="waterLevel">
+                    --
+                </strong>
+
+                <span>Tank</span>
+
+                <strong id="tankPercent">
+                    --
+                </strong>
+
+            </div>
+
+        </div>
+
+
+
+        <!-- PH -->
+
+        <div class="card ph-card">
+
+            <div class="card-header">
+
+                <span>🧪</span>
+
+                <div>
+                    <h3>pH Value</h3>
+                    <p>Water Quality</p>
+                </div>
+
+            </div>
+
+            <div class="big-value">
+
+                <span id="phValue">
+                    --
+                </span>
+
+            </div>
+
+            <div class="quality-status" id="phStatus">
+                Waiting
+            </div>
+
+        </div>
+
+
+
+        <!-- TURBIDITY -->
+
+        <div class="card turbidity-card">
+
+            <div class="card-header">
+
+                <span>🌫️</span>
+
+                <div>
+                    <h3>Turbidity</h3>
+                    <p>Water Clarity</p>
+                </div>
+
+            </div>
+
+            <div class="big-value">
+
+                <span id="turbidityValue">
+                    --
+                </span>
+
+            </div>
+
+            <div class="quality-status" id="turbidityStatus">
+                Waiting
+            </div>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- TANK STATUS -->
+
+    <section class="tank-panel">
+
+        <div class="tank-title">
+
+            <div>
+                <span class="small-label">
+                    TANK MONITORING
+                </span>
+
+                <h2 id="tankStatus">
+                    WAITING
+                </h2>
+            </div>
+
+            <div class="tank-percent">
+
+                <span id="tankPercentLarge">
+                    0%
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="tank-bar">
+
+            <div id="tankFill"></div>
+
+        </div>
+
+
+        <div class="tank-scale">
+
+            <span>0%</span>
+            <span>25%</span>
+            <span>50%</span>
+            <span>75%</span>
+            <span>100%</span>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- ALERTS -->
+
+    <section class="alert-grid">
+
+
+        <div class="alert-box" id="tankAlert">
+
+            <div class="alert-icon">
+                💧
+            </div>
+
+            <div>
+
+                <span class="small-label">
+                    TANK ALERT
+                </span>
+
+                <h3 id="tankAlertText">
+                    No Alert
+                </h3>
+
+            </div>
+
+        </div>
+
+
+        <div class="alert-box" id="qualityAlert">
+
+            <div class="alert-icon">
+                🧪
+            </div>
+
+            <div>
+
+                <span class="small-label">
+                    WATER QUALITY
+                </span>
+
+                <h3 id="qualityAlertText">
+                    No Alert
+                </h3>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- GRAPHS -->
+
+    <section class="section-title">
+
+        <span class="small-label">
+            LIVE ANALYTICS
+        </span>
+
+        <h2>Sensor Trends</h2>
+
+    </section>
+
+
+    <section class="charts">
+
+
+        <div class="chart-card">
+
+            <div class="chart-header">
+
+                <div>
+                    <h3>Water Level</h3>
+                    <p>Live tank level</p>
+                </div>
+
+                <strong id="waterAverage">
+                    Avg: --
+                </strong>
+
+            </div>
+
+            <canvas id="waterChart"></canvas>
+
+        </div>
+
+
+
+        <div class="chart-card">
+
+            <div class="chart-header">
+
+                <div>
+                    <h3>pH Trend</h3>
+                    <p>Live water quality</p>
+                </div>
+
+                <strong id="phAverage">
+                    Avg: --
+                </strong>
+
+            </div>
+
+            <canvas id="phChart"></canvas>
+
+        </div>
+
+
+
+        <div class="chart-card">
+
+            <div class="chart-header">
+
+                <div>
+                    <h3>Turbidity Trend</h3>
+                    <p>Water clarity monitoring</p>
+                </div>
+
+                <strong id="turbidityAverage">
+                    Avg: --
+                </strong>
+
+            </div>
+
+            <canvas id="turbidityChart"></canvas>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- STATISTICS -->
+
+    <section class="section-title">
+
+        <span class="small-label">
+            DATA ANALYTICS
+        </span>
+
+        <h2>System Statistics</h2>
+
+    </section>
+
+
+    <section class="stats">
+
+
+        <div class="stat-card">
+
+            <span>Water Level MAX</span>
+
+            <strong id="maxWater">
+                --
+            </strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <span>Water Level MIN</span>
+
+            <strong id="minWater">
+                --
+            </strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <span>pH MAX</span>
+
+            <strong id="maxPh">
+                --
+            </strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <span>pH MIN</span>
+
+            <strong id="minPh">
+                --
+            </strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <span>Turbidity MAX</span>
+
+            <strong id="maxTurbidity">
+                --
+            </strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <span>Turbidity MIN</span>
+
+            <strong id="minTurbidity">
+                --
+            </strong>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- CONTROLS -->
+
+    <section class="controls">
+
+        <button id="clearBtn">
+            CLEAR GRAPHS
+        </button>
+
+        <button id="downloadBtn">
+            DOWNLOAD CSV
+        </button>
+
+    </section>
+
+
+
+    <!-- PROJECT INFO -->
+
+    <section class="project-info">
+
+        <h2>Smart Water Monitoring System</h2>
+
+        <p>
+            Arduino UNO based real-time monitoring system
+            integrating ultrasonic tank-level measurement,
+            pH monitoring, turbidity detection, OLED display,
+            LED indication and GSM SMS alerts.
+        </p>
+
+        <div class="tech">
+
+            <span>Arduino UNO</span>
+            <span>Ultrasonic</span>
+            <span>pH Sensor</span>
+            <span>Turbidity</span>
+            <span>SH1106 OLED</span>
+            <span>SIM800L GSM</span>
+
+        </div>
+
+    </section>
+
+
+</main>
+
+
+<footer>
+
+    SMART WATER MONITORING SYSTEM
+
+    <span> | USB LIVE MONITORING</span>
+
+</footer>
+
+
+<script src="script.js"></script>
+
+</body>
+
+</html>

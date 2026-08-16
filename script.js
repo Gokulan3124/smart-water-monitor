@@ -1,6 +1,6 @@
 // =====================================================
 // SMART WATER MONITORING DASHBOARD
-// Arduino UNO + USB Serial
+// Arduino UNO + Web Serial
 // =====================================================
 
 let port = null;
@@ -10,20 +10,17 @@ let keepReading = false;
 let sampleCount = 0;
 
 let distanceData = [];
-let waterLevelData = [];
 let phData = [];
 let turbidityData = [];
+let labels = [];
 
-let timeLabels = [];
-
-const MAX_POINTS = 30;
-const TANK_HEIGHT = 50;
 
 // =====================================================
 // GET HTML ELEMENTS
 // =====================================================
 
 const connectBtn = document.getElementById("connectBtn");
+
 const connectionDot = document.getElementById("connectionDot");
 const connectionText = document.getElementById("connectionText");
 
@@ -32,14 +29,14 @@ const sampleCountElement = document.getElementById("sampleCount");
 const lastUpdate = document.getElementById("lastUpdate");
 
 const distanceElement = document.getElementById("distance");
-const waterLevelElement = document.getElementById("waterLevel");
-const tankPercentElement = document.getElementById("tankPercent");
-
 const phElement = document.getElementById("phValue");
 const turbidityElement = document.getElementById("turbidityValue");
 
-const tankStatus = document.getElementById("tankStatus");
+const waterLevelElement = document.getElementById("waterLevel");
+const tankPercentElement = document.getElementById("tankPercent");
 const tankPercentLarge = document.getElementById("tankPercentLarge");
+
+const tankStatus = document.getElementById("tankStatus");
 const tankFill = document.getElementById("tankFill");
 
 const phStatus = document.getElementById("phStatus");
@@ -55,17 +52,152 @@ const qualityAlertText = document.getElementById("qualityAlertText");
 
 if (!("serial" in navigator)) {
 
-    connectionText.textContent = "Web Serial Not Supported";
-
-    systemStatus.textContent = "USE CHROME / EDGE";
-
-    connectBtn.disabled = true;
-
     alert(
         "Web Serial is not supported in this browser.\n\n" +
         "Please use Google Chrome or Microsoft Edge."
     );
+
+    connectBtn.disabled = true;
 }
+
+
+// =====================================================
+// CHART SETUP
+// =====================================================
+
+const waterCtx =
+    document.getElementById("waterChart").getContext("2d");
+
+const phCtx =
+    document.getElementById("phChart").getContext("2d");
+
+const turbidityCtx =
+    document.getElementById("turbidityChart").getContext("2d");
+
+
+const waterChart = new Chart(waterCtx, {
+
+    type: "line",
+
+    data: {
+
+        labels: labels,
+
+        datasets: [{
+
+            label: "Water Distance (cm)",
+
+            data: distanceData,
+
+            borderWidth: 3,
+
+            tension: 0.3,
+
+            pointRadius: 2,
+
+            fill: false
+
+        }]
+
+    },
+
+    options: {
+
+        responsive: true,
+
+        maintainAspectRatio: false,
+
+        animation: false,
+
+        scales: {
+
+            y: {
+                beginAtZero: true
+            }
+
+        }
+
+    }
+
+});
+
+
+const phChart = new Chart(phCtx, {
+
+    type: "line",
+
+    data: {
+
+        labels: labels,
+
+        datasets: [{
+
+            label: "pH Raw",
+
+            data: phData,
+
+            borderWidth: 3,
+
+            tension: 0.3,
+
+            pointRadius: 2,
+
+            fill: false
+
+        }]
+
+    },
+
+    options: {
+
+        responsive: true,
+
+        maintainAspectRatio: false,
+
+        animation: false
+
+    }
+
+});
+
+
+const turbidityChart = new Chart(turbidityCtx, {
+
+    type: "line",
+
+    data: {
+
+        labels: labels,
+
+        datasets: [{
+
+            label: "Turbidity",
+
+            data: turbidityData,
+
+            borderWidth: 3,
+
+            tension: 0.3,
+
+            pointRadius: 2,
+
+            fill: false
+
+        }]
+
+    },
+
+    options: {
+
+        responsive: true,
+
+        maintainAspectRatio: false,
+
+        animation: false
+
+    }
+
+});
 
 
 // =====================================================
@@ -83,45 +215,97 @@ async function connectArduino() {
 
     try {
 
-        // Request Arduino serial port
+        if (!("serial" in navigator)) {
+
+            alert(
+                "Web Serial is not supported.\n" +
+                "Use Google Chrome or Microsoft Edge."
+            );
+
+            return;
+        }
+
+
+        console.log("Requesting Arduino serial port...");
+
+
+        // Open Chrome port selection window
+
         port = await navigator.serial.requestPort();
 
-        // Open at same baud rate as Arduino
+
+        console.log("Port selected.");
+
+
+        // IMPORTANT:
+        // Arduino Serial.begin(9600)
+
         await port.open({
+
             baudRate: 9600
+
         });
+
+
+        console.log("Arduino serial port opened.");
+
+
+        // Update dashboard status
+
+        connectionDot.classList.remove("offline");
+
+        connectionDot.classList.add("online");
+
+        connectionText.textContent =
+            "Arduino Connected";
+
+        systemStatus.textContent =
+            "SYSTEM ONLINE";
+
+        connectBtn.textContent =
+            "ARDUINO CONNECTED";
+
+
+        connectBtn.disabled = true;
+
 
         keepReading = true;
 
-        connectionDot.classList.remove("offline");
-        connectionDot.classList.add("online");
 
-        connectionText.textContent = "Arduino Connected";
-
-        connectBtn.textContent = "CONNECTED";
-
-        systemStatus.textContent = "SYSTEM ONLINE";
-
-        console.log("Arduino connected");
+        // Start reading Arduino data
 
         readSerial();
 
-    } catch (error) {
 
-        console.error(error);
+    }
 
-        connectionText.textContent = "Arduino Disconnected";
+    catch (error) {
 
-        systemStatus.textContent = "CONNECTION FAILED";
+        console.error("Arduino connection error:", error);
+
+        connectionDot.classList.remove("online");
+
+        connectionDot.classList.add("offline");
+
+        connectionText.textContent =
+            "Arduino Disconnected";
+
+        systemStatus.textContent =
+            "CONNECTION ERROR";
+
 
         alert(
             "Could not connect to Arduino.\n\n" +
-            "Make sure:\n" +
-            "1. Arduino is connected by USB\n" +
-            "2. Arduino Serial Monitor is closed\n" +
-            "3. You selected the correct COM port"
+            "Check:\n" +
+            "1. Arduino USB cable is connected\n" +
+            "2. Arduino Serial Monitor is CLOSED\n" +
+            "3. Correct COM port is selected\n" +
+            "4. Arduino code uses Serial.begin(9600)\n" +
+            "5. Use Google Chrome or Edge"
         );
+
     }
+
 }
 
 
@@ -131,234 +315,303 @@ async function connectArduino() {
 
 async function readSerial() {
 
-    const decoder = new TextDecoderStream();
+    const decoder =
+        new TextDecoderStream();
 
-    const inputDone = port.readable.pipeTo(decoder.writable);
+    const inputDone =
+        port.readable.pipeTo(decoder.writable);
 
-    reader = decoder.readable.getReader();
+    reader =
+        decoder.readable.getReader();
+
 
     let buffer = "";
+
 
     try {
 
         while (keepReading) {
 
-            const { value, done } = await reader.read();
+            const { value, done } =
+                await reader.read();
+
 
             if (done) {
+
+                console.log("Serial reader stopped.");
+
                 break;
             }
 
+
             if (value) {
+
+                console.log("Arduino:", value);
 
                 buffer += value;
 
-                let lines = buffer.split("\n");
 
-                buffer = lines.pop();
+                // Arduino uses Serial.println()
+                // so split data using newline
+
+                let lines =
+                    buffer.split(/\r?\n/);
+
+
+                // Keep incomplete line
+
+                buffer =
+                    lines.pop();
+
 
                 for (let line of lines) {
 
-                    line = line.trim();
+                    processArduinoLine(line.trim());
 
-                    if (line.length > 0) {
-
-                        console.log("Arduino:", line);
-
-                        processSerialLine(line);
-                    }
                 }
+
             }
+
         }
 
-    } catch (error) {
-
-        console.error("Serial read error:", error);
-
-    } finally {
-
-        reader.releaseLock();
     }
+
+    catch (error) {
+
+        console.error(
+            "Serial reading error:",
+            error
+        );
+
+    }
+
+    finally {
+
+        try {
+
+            reader.releaseLock();
+
+        }
+
+        catch (e) {}
+
+    }
+
 }
 
 
 // =====================================================
-// PROCESS ARDUINO SERIAL LINE
+// PROCESS ARDUINO LINE
 // =====================================================
 
-function processSerialLine(line) {
+function processArduinoLine(line) {
 
-    // -------------------------------------------------
+    if (!line) {
+        return;
+    }
+
+
+    console.log("Received:", line);
+
+
+    // -----------------------------------------
     // DISTANCE
     // Example:
-    // Distance: 18.52 cm
-    // -------------------------------------------------
+    // Distance: 15.23 cm
+    // -----------------------------------------
 
     if (line.startsWith("Distance:")) {
 
-        let value = line
-            .replace("Distance:", "")
-            .replace("cm", "")
-            .trim();
+        let match =
+            line.match(
+                /Distance:\s*(-?\d+(?:\.\d+)?)/i
+            );
 
-        let distance = parseFloat(value);
 
-        if (!isNaN(distance)) {
+        if (match) {
+
+            const distance =
+                parseFloat(match[1]);
+
 
             updateDistance(distance);
+
         }
 
-        return;
     }
 
 
-    // -------------------------------------------------
+    // -----------------------------------------
     // PH
     // Example:
     // pH: 512
-    // -------------------------------------------------
+    // -----------------------------------------
 
-    if (line.startsWith("pH:")) {
+    else if (
+        line.toLowerCase().startsWith("ph:")
+    ) {
 
-        let value = line
-            .replace("pH:", "")
-            .trim();
+        let match =
+            line.match(
+                /pH:\s*(-?\d+(?:\.\d+)?)/i
+            );
 
-        let ph = parseFloat(value);
 
-        if (!isNaN(ph)) {
+        if (match) {
+
+            const ph =
+                parseFloat(match[1]);
+
 
             updatePH(ph);
+
         }
 
-        return;
     }
 
 
-    // -------------------------------------------------
+    // -----------------------------------------
     // TURBIDITY
     // Example:
-    // Turbidity: 245
-    // -------------------------------------------------
+    // Turbidity: 430
+    // -----------------------------------------
 
-    if (line.startsWith("Turbidity:")) {
+    else if (
+        line.toLowerCase().startsWith("turbidity:")
+    ) {
 
-        let value = line
-            .replace("Turbidity:", "")
-            .trim();
+        let match =
+            line.match(
+                /Turbidity:\s*(-?\d+(?:\.\d+)?)/i
+            );
 
-        let turbidity = parseFloat(value);
 
-        if (!isNaN(turbidity)) {
+        if (match) {
+
+            const turbidity =
+                parseFloat(match[1]);
+
 
             updateTurbidity(turbidity);
+
+            // One complete sample received
+
+            completeSample();
+
         }
 
-        return;
     }
 
-
-    // -------------------------------------------------
-    // SMS STATUS
-    // -------------------------------------------------
-
-    if (line.includes("Tank SMS Sent")) {
-
-        console.log("Tank SMS sent");
-
-    }
-
-    if (line.includes("Quality SMS Sent")) {
-
-        console.log("Quality SMS sent");
-    }
 }
 
 
 // =====================================================
-// DISTANCE UPDATE
+// UPDATE DISTANCE
 // =====================================================
 
 function updateDistance(distance) {
 
-    distanceElement.textContent = distance.toFixed(1);
+    if (distance < 0) {
 
-    // Calculate water level
-    let waterLevel = TANK_HEIGHT - distance;
+        distanceElement.textContent =
+            "No Echo";
 
-    if (waterLevel < 0) {
-        waterLevel = 0;
+        return;
+
     }
 
-    if (waterLevel > TANK_HEIGHT) {
-        waterLevel = TANK_HEIGHT;
-    }
 
-    // Calculate percentage
-    let percent = (waterLevel / TANK_HEIGHT) * 100;
+    distanceElement.textContent =
+        distance.toFixed(1);
 
-    percent = Math.round(percent);
 
-    waterLevelElement.textContent =
-        waterLevel.toFixed(1) + " cm";
+    // -------------------------------------------------
+    // TANK LEVEL CALCULATION
+    //
+    // Assumption:
+    // 0 cm = full
+    // 30 cm = empty
+    //
+    // Change MAX_DISTANCE if your tank is different.
+    // -------------------------------------------------
+
+    const MAX_DISTANCE = 30;
+
+
+    let percent =
+        ((MAX_DISTANCE - distance) /
+            MAX_DISTANCE) * 100;
+
+
+    percent =
+        Math.max(
+            0,
+            Math.min(100, percent)
+        );
+
+
+    percent =
+        Math.round(percent);
+
 
     tankPercentElement.textContent =
         percent + "%";
 
+
     tankPercentLarge.textContent =
         percent + "%";
+
 
     tankFill.style.width =
         percent + "%";
 
 
-    // Tank status
-    if (distance <= 10) {
+    // Water level status
 
-        tankStatus.textContent = "GOOD";
+    if (percent >= 70) {
+
+        waterLevelElement.textContent =
+            "HIGH";
+
+        tankStatus.textContent =
+            "GOOD WATER LEVEL";
 
         tankAlertText.textContent =
-            "Tank Level Normal";
+            "Normal";
 
     }
 
-    else if (distance <= 25) {
+    else if (percent >= 40) {
 
-        tankStatus.textContent = "WARNING";
+        waterLevelElement.textContent =
+            "MEDIUM";
+
+        tankStatus.textContent =
+            "MEDIUM LEVEL";
 
         tankAlertText.textContent =
-            "Tank Level Moderate";
+            "Monitor Level";
 
     }
 
     else {
 
-        tankStatus.textContent = "CRITICAL";
+        waterLevelElement.textContent =
+            "LOW";
+
+        tankStatus.textContent =
+            "LOW WATER LEVEL";
 
         tankAlertText.textContent =
-            "LOW WATER LEVEL";
+            "LOW WATER ALERT";
+
     }
 
-
-    // Add graph data
-    distanceData.push(distance);
-
-    waterLevelData.push(waterLevel);
-
-    addTimeLabel();
-
-    limitGraphData();
-
-    updateStatistics();
-
-    updateCharts();
-
-    updateSystemStatus();
 }
 
 
 // =====================================================
-// PH UPDATE
+// UPDATE PH
 // =====================================================
 
 function updatePH(ph) {
@@ -366,49 +619,29 @@ function updatePH(ph) {
     phElement.textContent =
         Math.round(ph);
 
-    phData.push(ph);
 
-    limitGraphData();
-
-    updateStatistics();
-
-    updateCharts();
-
-    // Your current Arduino gives RAW pH value.
-    // These limits match your Arduino code.
+    // Your Arduino currently sends RAW pH value,
+    // not actual calibrated pH.
 
     if (ph >= 300 && ph <= 700) {
 
         phStatus.textContent =
             "NORMAL";
 
-        phStatus.style.color =
-            "#00ff9d";
-
-        qualityAlertText.textContent =
-            "Water Quality Normal";
-
     }
 
     else {
 
         phStatus.textContent =
-            "ALERT";
+            "QUALITY ALERT";
 
-        phStatus.style.color =
-            "#ff3d55";
-
-        qualityAlertText.textContent =
-            "Water Quality Alert";
     }
 
-
-    updateSystemStatus();
 }
 
 
 // =====================================================
-// TURBIDITY UPDATE
+// UPDATE TURBIDITY
 // =====================================================
 
 function updateTurbidity(turbidity) {
@@ -416,329 +649,133 @@ function updateTurbidity(turbidity) {
     turbidityElement.textContent =
         Math.round(turbidity);
 
-    turbidityData.push(turbidity);
-
-    limitGraphData();
-
-    updateStatistics();
-
-    updateCharts();
-
 
     if (turbidity <= 600) {
 
         turbidityStatus.textContent =
             "NORMAL";
 
-        turbidityStatus.style.color =
-            "#00ff9d";
-
     }
 
     else {
 
         turbidityStatus.textContent =
-            "HIGH";
+            "HIGH TURBIDITY";
 
-        turbidityStatus.style.color =
-            "#ff3d55";
     }
 
-
-    updateSystemStatus();
 }
 
 
 // =====================================================
-// TIME LABEL
+// COMPLETE SAMPLE
 // =====================================================
 
-function addTimeLabel() {
-
-    const now = new Date();
-
-    const time =
-        now.getHours().toString().padStart(2, "0")
-        + ":" +
-        now.getMinutes().toString().padStart(2, "0")
-        + ":" +
-        now.getSeconds().toString().padStart(2, "0");
-
-    timeLabels.push(time);
-
-    if (timeLabels.length > MAX_POINTS) {
-
-        timeLabels.shift();
-    }
-}
-
-
-// =====================================================
-// LIMIT GRAPH DATA
-// =====================================================
-
-function limitGraphData() {
-
-    while (distanceData.length > MAX_POINTS) {
-        distanceData.shift();
-    }
-
-    while (waterLevelData.length > MAX_POINTS) {
-        waterLevelData.shift();
-    }
-
-    while (phData.length > MAX_POINTS) {
-        phData.shift();
-    }
-
-    while (turbidityData.length > MAX_POINTS) {
-        turbidityData.shift();
-    }
-}
-
-
-// =====================================================
-// SYSTEM STATUS
-// =====================================================
-
-function updateSystemStatus() {
+function completeSample() {
 
     sampleCount++;
+
 
     sampleCountElement.textContent =
         sampleCount;
 
-    const now = new Date();
 
-    lastUpdate.textContent =
+    const now =
+        new Date();
+
+
+    const time =
         now.toLocaleTimeString();
 
-    systemStatus.textContent =
-        "LIVE MONITORING";
-}
+
+    lastUpdate.textContent =
+        time;
 
 
-// =====================================================
-// CHART SETUP
-// =====================================================
-
-const waterChart =
-    new Chart(
-        document.getElementById("waterChart"),
-        {
-
-            type: "line",
-
-            data: {
-
-                labels: timeLabels,
-
-                datasets: [
-
-                    {
-                        label: "Water Level (cm)",
-
-                        data: waterLevelData,
-
-                        borderWidth: 2,
-
-                        tension: 0.3,
-
-                        fill: true
-                    }
-
-                ]
-            },
-
-            options: {
-
-                responsive: true,
-
-                maintainAspectRatio: false,
-
-                animation: false,
-
-                scales: {
-
-                    y: {
-
-                        beginAtZero: true,
-
-                        max: TANK_HEIGHT
-
-                    }
-
-                }
-            }
-        }
-    );
+    labels.push(time);
 
 
-// =====================================================
-// PH CHART
-// =====================================================
+    // Add current values
 
-const phChart =
-    new Chart(
-        document.getElementById("phChart"),
-        {
+    const distance =
+        parseFloat(
+            distanceElement.textContent
+        );
 
-            type: "line",
+    const ph =
+        parseFloat(
+            phElement.textContent
+        );
 
-            data: {
-
-                labels: timeLabels,
-
-                datasets: [
-
-                    {
-                        label: "pH Raw Value",
-
-                        data: phData,
-
-                        borderWidth: 2,
-
-                        tension: 0.3,
-
-                        fill: true
-                    }
-
-                ]
-            },
-
-            options: {
-
-                responsive: true,
-
-                maintainAspectRatio: false,
-
-                animation: false
-            }
-        }
-    );
+    const turbidity =
+        parseFloat(
+            turbidityElement.textContent
+        );
 
 
-// =====================================================
-// TURBIDITY CHART
-// =====================================================
+    if (!isNaN(distance)) {
 
-const turbidityChart =
-    new Chart(
-        document.getElementById("turbidityChart"),
-        {
+        distanceData.push(distance);
 
-            type: "line",
+    }
 
-            data: {
+    else {
 
-                labels: timeLabels,
+        distanceData.push(null);
 
-                datasets: [
-
-                    {
-                        label: "Turbidity",
-
-                        data: turbidityData,
-
-                        borderWidth: 2,
-
-                        tension: 0.3,
-
-                        fill: true
-                    }
-
-                ]
-            },
-
-            options: {
-
-                responsive: true,
-
-                maintainAspectRatio: false,
-
-                animation: false
-            }
-        }
-    );
+    }
 
 
-// =====================================================
-// UPDATE CHARTS
-// =====================================================
+    if (!isNaN(ph)) {
 
-function updateCharts() {
+        phData.push(ph);
 
-    waterChart.data.labels =
-        [...timeLabels];
+    }
 
-    waterChart.data.datasets[0].data =
-        [...waterLevelData];
+    else {
+
+        phData.push(null);
+
+    }
+
+
+    if (!isNaN(turbidity)) {
+
+        turbidityData.push(turbidity);
+
+    }
+
+    else {
+
+        turbidityData.push(null);
+
+    }
+
+
+    // Keep last 50 samples
+
+    if (labels.length > 50) {
+
+        labels.shift();
+
+        distanceData.shift();
+
+        phData.shift();
+
+        turbidityData.shift();
+
+    }
+
 
     waterChart.update("none");
 
-
-    phChart.data.labels =
-        [...timeLabels];
-
-    phChart.data.datasets[0].data =
-        [...phData];
-
     phChart.update("none");
-
-
-    turbidityChart.data.labels =
-        [...timeLabels];
-
-    turbidityChart.data.datasets[0].data =
-        [...turbidityData];
 
     turbidityChart.update("none");
 
 
-    updateAverages();
-}
+    updateStatistics();
 
-
-// =====================================================
-// AVERAGES
-// =====================================================
-
-function calculateAverage(array) {
-
-    if (array.length === 0) {
-
-        return "--";
-    }
-
-    let total = 0;
-
-    for (let value of array) {
-
-        total += value;
-    }
-
-    return (
-        total / array.length
-    ).toFixed(1);
-}
-
-
-function updateAverages() {
-
-    document.getElementById("waterAverage").textContent =
-        "Avg: " +
-        calculateAverage(waterLevelData) +
-        " cm";
-
-
-    document.getElementById("phAverage").textContent =
-        "Avg: " +
-        calculateAverage(phData);
-
-
-    document.getElementById("turbidityAverage").textContent =
-        "Avg: " +
-        calculateAverage(turbidityData);
 }
 
 
@@ -748,36 +785,124 @@ function updateAverages() {
 
 function updateStatistics() {
 
-    if (waterLevelData.length > 0) {
+    updateArrayStatistics(
+        distanceData,
+        "maxWater",
+        "minWater"
+    );
 
-        document.getElementById("maxWater").textContent =
-            Math.max(...waterLevelData).toFixed(1) +
-            " cm";
 
-        document.getElementById("minWater").textContent =
-            Math.min(...waterLevelData).toFixed(1) +
-            " cm";
+    updateArrayStatistics(
+        phData,
+        "maxPh",
+        "minPh"
+    );
+
+
+    updateArrayStatistics(
+        turbidityData,
+        "maxTurbidity",
+        "minTurbidity"
+    );
+
+
+    updateAverage(
+        distanceData,
+        "waterAverage"
+    );
+
+
+    updateAverage(
+        phData,
+        "phAverage"
+    );
+
+
+    updateAverage(
+        turbidityData,
+        "turbidityAverage"
+    );
+
+}
+
+
+// =====================================================
+// MAX / MIN
+// =====================================================
+
+function updateArrayStatistics(
+    data,
+    maxId,
+    minId
+) {
+
+    const valid =
+        data.filter(
+            x => typeof x === "number" && !isNaN(x)
+        );
+
+
+    if (valid.length === 0) {
+
+        return;
+
     }
 
 
-    if (phData.length > 0) {
+    const max =
+        Math.max(...valid);
 
-        document.getElementById("maxPh").textContent =
-            Math.max(...phData).toFixed(0);
 
-        document.getElementById("minPh").textContent =
-            Math.min(...phData).toFixed(0);
+    const min =
+        Math.min(...valid);
+
+
+    document.getElementById(maxId)
+        .textContent =
+        max.toFixed(1);
+
+
+    document.getElementById(minId)
+        .textContent =
+        min.toFixed(1);
+
+}
+
+
+// =====================================================
+// AVERAGE
+// =====================================================
+
+function updateAverage(data, id) {
+
+    const valid =
+        data.filter(
+            x => typeof x === "number" && !isNaN(x)
+        );
+
+
+    if (valid.length === 0) {
+
+        return;
+
     }
 
 
-    if (turbidityData.length > 0) {
+    const sum =
+        valid.reduce(
+            (a, b) => a + b,
+            0
+        );
 
-        document.getElementById("maxTurbidity").textContent =
-            Math.max(...turbidityData).toFixed(0);
 
-        document.getElementById("minTurbidity").textContent =
-            Math.min(...turbidityData).toFixed(0);
-    }
+    const average =
+        sum / valid.length;
+
+
+    document.getElementById(id)
+        .textContent =
+        "Avg: " + average.toFixed(1);
+
 }
 
 
@@ -785,102 +910,132 @@ function updateStatistics() {
 // CLEAR GRAPHS
 // =====================================================
 
-document.getElementById("clearBtn")
-    .addEventListener("click", function () {
-
-        distanceData = [];
-        waterLevelData = [];
-        phData = [];
-        turbidityData = [];
-        timeLabels = [];
-
-        sampleCount = 0;
-
-        sampleCountElement.textContent = "0";
-
-        waterChart.data.labels = [];
-        waterChart.data.datasets[0].data = [];
-        waterChart.update();
+document
+    .getElementById("clearBtn")
+    .addEventListener(
+        "click",
+        clearGraphs
+    );
 
 
-        phChart.data.labels = [];
-        phChart.data.datasets[0].data = [];
-        phChart.update();
+function clearGraphs() {
+
+    labels.length = 0;
+
+    distanceData.length = 0;
+
+    phData.length = 0;
+
+    turbidityData.length = 0;
 
 
-        turbidityChart.data.labels = [];
-        turbidityChart.data.datasets[0].data = [];
-        turbidityChart.update();
+    sampleCount = 0;
 
 
-        document.getElementById("maxWater").textContent = "--";
-        document.getElementById("minWater").textContent = "--";
+    sampleCountElement.textContent =
+        "0";
 
-        document.getElementById("maxPh").textContent = "--";
-        document.getElementById("minPh").textContent = "--";
 
-        document.getElementById("maxTurbidity").textContent = "--";
-        document.getElementById("minTurbidity").textContent = "--";
+    lastUpdate.textContent =
+        "--";
+
+
+    waterChart.update();
+
+    phChart.update();
+
+    turbidityChart.update();
+
+
+    [
+        "maxWater",
+        "minWater",
+        "maxPh",
+        "minPh",
+        "maxTurbidity",
+        "minTurbidity"
+    ].forEach(id => {
+
+        document.getElementById(id)
+            .textContent = "--";
+
+    });
+
+
+    [
+        "waterAverage",
+        "phAverage",
+        "turbidityAverage"
+    ].forEach(id => {
+
+        document.getElementById(id)
+            .textContent = "Avg: --";
 
     });
 
+}
+
 
 // =====================================================
-// CSV DOWNLOAD
+// DOWNLOAD CSV
 // =====================================================
 
-document.getElementById("downloadBtn")
-    .addEventListener("click", function () {
-
-        let csv =
-            "Time,Water Level (cm),Distance (cm),pH Raw,Turbidity\n";
-
-
-        let rows =
-            Math.max(
-                timeLabels.length,
-                waterLevelData.length,
-                distanceData.length,
-                phData.length,
-                turbidityData.length
-            );
+document
+    .getElementById("downloadBtn")
+    .addEventListener(
+        "click",
+        downloadCSV
+    );
 
 
-        for (let i = 0; i < rows; i++) {
+function downloadCSV() {
 
-            csv +=
-                (timeLabels[i] || "") + "," +
-                (waterLevelData[i] || "") + "," +
-                (distanceData[i] || "") + "," +
-                (phData[i] || "") + "," +
-                (turbidityData[i] || "") +
-                "\n";
-        }
+    let csv =
+        "Time,Distance_cm,pH_Raw,Turbidity\n";
 
 
-        const blob =
-            new Blob(
-                [csv],
-                {
-                    type: "text/csv"
-                }
-            );
+    for (
+        let i = 0;
+        i < labels.length;
+        i++
+    ) {
+
+        csv +=
+            labels[i] + "," +
+            distanceData[i] + "," +
+            phData[i] + "," +
+            turbidityData[i] +
+            "\n";
+
+    }
 
 
-        const url =
-            URL.createObjectURL(blob);
+    const blob =
+        new Blob(
+            [csv],
+            {
+                type: "text/csv"
+            }
+        );
 
 
-        const a =
-            document.createElement("a");
+    const url =
+        URL.createObjectURL(blob);
 
-        a.href = url;
 
-        a.download =
-            "smart-water-data.csv";
+    const a =
+        document.createElement("a");
 
-        a.click();
 
-        URL.revokeObjectURL(url);
+    a.href = url;
 
-    });
+    a.download =
+        "smart-water-data.csv";
+
+
+    a.click();
+
+
+    URL.revokeObjectURL(url);
+
+}

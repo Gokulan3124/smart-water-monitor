@@ -5,7 +5,7 @@
 The **Smart Water Monitoring System** is an Arduino UNO based system designed to continuously monitor:
 
 - 💧 Water tank level
-- 🧪 Water pH
+- 🧪 Water pH 
 - 🌫️ Water turbidity
 - 🚦 Tank-level status using LEDs
 - 📱 SMS alerts using SIM800L GSM

@@ -1,0 +1,201 @@
+#include <Wire.h>
+#include <U8x8lib.h>
+#include <SoftwareSerial.h>
+
+// OLED
+U8X8_SH1106_128X64_NONAME_HW_I2C display(U8X8_PIN_NONE);
+
+// SIM800L
+SoftwareSerial gsm(7, 8);   // RX, TX
+
+const char phoneNumber[] = "+91xxxxxxxxxx";
+
+// Ultrasonic
+const int TRIG = 9;
+const int ECHO = 10;
+
+// Sensors
+const int PH_PIN = A0;
+const int TURBIDITY_PIN = A1;
+
+// LEDs
+const int GREEN_LED = 4;
+const int YELLOW_LED = 5;
+const int RED_LED = 6;
+
+bool tankAlertSent = false;
+bool qualityAlertSent = false;
+
+void setup()
+{
+  Serial.begin(9600);
+  gsm.begin(9600);
+
+  pinMode(TRIG, OUTPUT);
+  pinMode(ECHO, INPUT);
+
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(YELLOW_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+
+  display.begin();
+  display.setFont(u8x8_font_chroma48medium8_r);
+
+  display.clear();
+  display.drawString(0, 0, "SMART WATER");
+  display.drawString(0, 2, "MONITOR");
+  delay(2000);
+
+  gsm.println("AT");
+  delay(1000);
+
+  gsm.println("AT+CMGF=1");
+  delay(1000);
+}
+
+void loop()
+{
+  // Ultrasonic
+  digitalWrite(TRIG, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(TRIG, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(TRIG, LOW);
+
+  long duration = pulseIn(ECHO, HIGH, 30000);
+
+  float distance;
+
+  if (duration == 0)
+    distance = -1;
+  else
+    distance = duration * 0.0343 / 2.0;
+
+  // Sensors
+  int phValue = analogRead(PH_PIN);
+  int turbidityValue = analogRead(TURBIDITY_PIN);
+
+  // LED Control (Distance only)
+  if (distance >= 0 && distance <= 10)
+  {
+    digitalWrite(GREEN_LED, HIGH);
+    digitalWrite(YELLOW_LED, LOW);
+    digitalWrite(RED_LED, LOW);
+  }
+  else if (distance > 10 && distance <= 25)
+  {
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(YELLOW_LED, HIGH);
+    digitalWrite(RED_LED, LOW);
+  }
+  else
+  {
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(YELLOW_LED, LOW);
+    digitalWrite(RED_LED, HIGH);
+  }
+
+  // Serial Monitor
+  Serial.println("----------------");
+
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.println(" cm");
+
+  Serial.print("pH: ");
+  Serial.println(phValue);
+
+  Serial.print("Turbidity: ");
+  Serial.println(turbidityValue);
+
+  // OLED
+  display.clear();
+
+  display.drawString(0, 0, "Water Monitor");
+
+  display.setCursor(0, 2);
+  display.print("D:");
+  display.print(distance);
+
+  display.setCursor(0, 4);
+  display.print("PH:");
+  display.print(phValue);
+
+  display.setCursor(0, 6);
+  display.print("TB:");
+  display.print(turbidityValue);
+
+  // Tank Alert
+  if (distance > 25)
+  {
+    if (!tankAlertSent)
+    {
+      sendTankSMS(distance);
+      tankAlertSent = true;
+    }
+  }
+  else
+  {
+    tankAlertSent = false;
+  }
+
+  // Water Quality Alert
+  if (phValue < 300 || phValue > 700 || turbidityValue > 600)
+  {
+    if (!qualityAlertSent)
+    {
+      sendQualitySMS(phValue, turbidityValue);
+      qualityAlertSent = true;
+    }
+  }
+  else
+  {
+    qualityAlertSent = false;
+  }
+
+  delay(1000);
+}
+
+void sendTankSMS(float distance)
+{
+  gsm.println("AT+CMGF=1");
+  delay(1000);
+
+  gsm.print("AT+CMGS=\"");
+  gsm.print(phoneNumber);
+  gsm.println("\"");
+  delay(1000);
+
+  gsm.print("LOW WATER LEVEL ALERT Distance=");
+  gsm.print(distance);
+  gsm.print(" cm");
+
+  gsm.write(26);
+
+  Serial.println("Tank SMS Sent");
+  delay(5000);
+}
+
+void sendQualitySMS(int phValue, int turbidityValue)
+{
+  gsm.println("AT+CMGF=1");
+  delay(1000);
+
+  gsm.print("AT+CMGS=\"");
+  gsm.print(phoneNumber);
+  gsm.println("\"");
+  delay(1000);
+
+  gsm.print("WATER QUALITY ALERT ");
+  gsm.print("PH=");
+  gsm.print(phValue);
+  gsm.print(" TURB=");
+  gsm.print(turbidityValue);
+
+  gsm.write(26);
+
+  Serial.println("Quality SMS Sent");
+  delay(5000);
+}
